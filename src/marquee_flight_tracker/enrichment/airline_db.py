@@ -3,6 +3,7 @@
 Parses ICAO 3-letter codes from ATC callsigns and maps to airline info.
 Uses the OpenFlights airlines database.
 """
+from __future__ import annotations
 import csv
 import io
 import json

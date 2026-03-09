@@ -2,6 +2,8 @@
 
 Downloads and caches the OpenSky aircraft database CSV.
 """
+from __future__ import annotations
+
 import csv
 import io
 import json
@@ -74,20 +76,28 @@ class AircraftDB:
     def _parse_csv(self, csv_path: Path):
         try:
             text = csv_path.read_text(encoding="utf-8", errors="replace")
-            reader = csv.DictReader(io.StringIO(text))
+            reader = csv.DictReader(io.StringIO(text), quotechar="'")
             for row in reader:
-                icao24 = row.get("icao24", "").strip().lower()
+                # Get value helper — keys/values may have residual quotes
+                def g(key):
+                    val = row.get(key, "")
+                    if val is None:
+                        return None
+                    return val.strip().strip("'") or None
+
+                icao24 = g("icao24")
                 if not icao24:
                     continue
+                icao24 = icao24.lower()
                 self._db[icao24] = AircraftInfo(
                     icao24=icao24,
-                    registration=row.get("registration", "").strip() or None,
-                    typecode=row.get("typecode", "").strip() or None,
-                    model=row.get("model", "").strip() or None,
-                    manufacturer=row.get("manufacturername", "").strip() or None,
-                    operator=row.get("operator", "").strip() or None,
-                    operator_icao=row.get("operatoricao", "").strip() or None,
-                    operator_iata=row.get("operatoriata", "").strip() or None,
+                    registration=g("registration"),
+                    typecode=g("typecode"),
+                    model=g("model"),
+                    manufacturer=g("manufacturerName"),
+                    operator=g("operator"),
+                    operator_icao=g("operatorIcao"),
+                    operator_iata=g("operatorIata"),
                 )
         except Exception as e:
             logger.warning("Failed to parse aircraft DB CSV: %s", e)

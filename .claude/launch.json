@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-marquee",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["/Users/levijohnson/Documents/Marquee Flight Tracker/run_web.sh"],
+      "port": 5000,
+      "autoPort": true
+    }
+  ]
+}

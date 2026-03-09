@@ -5,6 +5,8 @@ Uses a tiered approach:
 2. Local disk cache from previous resolutions
 3. Graceful degradation (no route)
 """
+from __future__ import annotations
+
 import json
 import logging
 import time

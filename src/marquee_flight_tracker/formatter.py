@@ -33,13 +33,23 @@ def format_flight(flight: EnrichedFlight, use_unicode: bool = True) -> str:
     return "  ".join(parts)
 
 
-def _format_aircraft_type(info) -> str | None:
+def _format_aircraft_type(info):
     """Pick the best available aircraft type description."""
     # Prefer the typecode-based friendly name
     if info.typecode and info.typecode in COMMON_TYPES:
         return COMMON_TYPES[info.typecode]
 
-    # Fall back to the model field from the database
+    # Build a display name from manufacturer + model
+    if info.model and info.manufacturer:
+        model = info.model
+        mfr = info.manufacturer
+        # If the model already contains the manufacturer name, just use model
+        if mfr.lower() in model.lower():
+            return model
+        # Combine them for readability (e.g. "Cessna" + "182T" -> "Cessna 182T")
+        return f"{mfr} {model}"
+
+    # Fall back to just the model
     if info.model:
         return info.model
 
@@ -121,9 +131,62 @@ COMMON_TYPES = {
     "E75S": "Embraer E175 Short",
     "E290": "Embraer E190-E2",
     "E295": "Embraer E195-E2",
+    "G280": "Gulfstream G280",
+    "GALX": "Gulfstream G200",
+    "GL5T": "Bombardier Challenger 600",
+    "GLF4": "Gulfstream G450",
+    "GLF5": "Gulfstream G550",
     "GLF6": "Gulfstream G650",
     "GLEX": "Bombardier Global Express",
+    "H25B": "Hawker 800",
+    "LJ45": "Learjet 45",
+    "LJ60": "Learjet 60",
     "MD11": "MD-11",
     "MD82": "MD-82",
     "MD83": "MD-83",
+    "C150": "Cessna 150",
+    "C152": "Cessna 152",
+    "C172": "Cessna 172",
+    "C182": "Cessna 182",
+    "C206": "Cessna 206",
+    "C208": "Cessna Caravan",
+    "C210": "Cessna 210",
+    "C25A": "Cessna Citation CJ2",
+    "C25B": "Cessna Citation CJ3",
+    "C25C": "Cessna Citation CJ4",
+    "C510": "Cessna Citation Mustang",
+    "C525": "Cessna CitationJet",
+    "C550": "Cessna Citation II",
+    "C560": "Cessna Citation V",
+    "C680": "Cessna Citation Sovereign",
+    "C750": "Cessna Citation X",
+    "DA40": "Diamond DA40",
+    "DA42": "Diamond DA42 Twin Star",
+    "DA62": "Diamond DA62",
+    "P28A": "Piper Cherokee",
+    "PA28": "Piper Cherokee",
+    "PA32": "Piper Saratoga",
+    "PA34": "Piper Seneca",
+    "PA44": "Piper Seminole",
+    "PA46": "Piper Malibu",
+    "PC12": "Pilatus PC-12",
+    "PC24": "Pilatus PC-24",
+    "SR20": "Cirrus SR20",
+    "SR22": "Cirrus SR22",
+    "SF50": "Cirrus Vision Jet",
+    "BE20": "Beechcraft King Air 200",
+    "BE36": "Beechcraft Bonanza",
+    "BE58": "Beechcraft Baron",
+    "BE9L": "Beechcraft King Air 90",
+    "BE40": "Beechcraft Beechjet 400",
+    "B350": "Beechcraft King Air 350",
+    "TBM7": "Daher TBM 700",
+    "TBM8": "Daher TBM 850",
+    "TBM9": "Daher TBM 930",
+    "P180": "Piaggio Avanti",
+    "C30J": "C-130J Super Hercules",
+    "C17": "C-17 Globemaster",
+    "F16": "F-16 Fighting Falcon",
+    "A10": "A-10 Thunderbolt II",
+    "K35R": "KC-135 Stratotanker",
 }
