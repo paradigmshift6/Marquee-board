@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+.eggs/
+
+# Cached reference databases (large, downloaded at runtime)
+data/*.csv
+data/*.dat
+data/*_meta.json
+data/route_cache.json
+
+# User config
+config.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

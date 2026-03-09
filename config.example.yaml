@@ -1,0 +1,32 @@
+# Marquee Flight Tracker Configuration
+# Copy this file to config.yaml and update with your coordinates.
+
+location:
+  latitude: 37.7749        # Your latitude (get from Google Maps)
+  longitude: -122.4194     # Your longitude
+  radius_miles: 5           # Bounding box radius around your location
+
+polling:
+  interval_seconds: 12      # Minimum 10s for anonymous OpenSky access
+  min_altitude_feet: 500    # Ignore ground traffic
+  max_altitude_feet: 45000  # Ignore very high altitude
+
+display:
+  backend: terminal          # terminal | web
+  scroll_speed: 0.08         # Seconds per scroll step (lower = faster)
+  cycle_interval: 8          # Seconds per aircraft before cycling
+  idle_message: "Scanning the skies..."
+
+web:
+  host: 0.0.0.0
+  port: 5000
+
+# Optional: Create a free account at https://opensky-network.org
+# to enable route lookups (origin/destination airports)
+opensky:
+  username: null
+  password: null
+
+enrichment:
+  cache_dir: data
+  cache_ttl_hours: 168       # Re-download reference databases weekly
