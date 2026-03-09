@@ -62,6 +62,14 @@ class FlightTrackerApp:
                 # Enrich each flight
                 flights = [self._enrich(s) for s in filtered]
 
+                # Only show aircraft within the configured radius
+                radius = self._config.location.radius_miles
+                flights = [
+                    f for f in flights
+                    if f.distance_miles is not None
+                    and f.distance_miles <= radius
+                ]
+
                 # Sort by distance (closest first)
                 flights.sort(key=lambda f: f.distance_miles or float("inf"))
 
