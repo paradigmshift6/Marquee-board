@@ -154,12 +154,15 @@ class LayoutEngine:
         # Clock at top
         self._draw_clock_section(frame, y_start=0, y_end=14)
 
-        # Weather in middle
+        # Weather in middle (if available)
         if weather:
-            self._draw_weather_section(frame, weather, y_start=14, y_end=40)
+            self._draw_weather_section(frame, weather, y_start=14, y_end=38)
+            cal_start = 38
+        else:
+            cal_start = 16
 
-        # Calendar event at bottom
-        self._draw_calendar_section(frame, event, y_start=40, y_end=self.height)
+        # Calendar event — gets more space when weather absent
+        self._draw_calendar_section(frame, event, y_start=cal_start, y_end=self.height)
 
     def _layout_weather_full(
         self,
@@ -273,20 +276,23 @@ class LayoutEngine:
         """Render a calendar event section."""
         d = event.data
         y = y_start + 1
+        available_height = y_end - y_start
 
-        # Icon + "NEXT UP" label
+        # Icon + time / countdown header
         frame.elements.append(IconElement(1, y, "calendar", size=8))
 
         minutes = d.get("minutes_until")
+        start_time = d.get("start_time", "")
+
         if minutes is not None and minutes < 60:
-            label = f"IN {minutes} MIN"
+            label = f"{start_time}  in {minutes}m" if start_time else f"IN {minutes} MIN"
             label_color = colors.RED if minutes < 10 else colors.ORANGE
         elif minutes is not None:
             hours = minutes // 60
-            label = f"IN {hours}H"
+            label = f"{start_time}  {hours}h" if start_time else f"IN {hours}H"
             label_color = colors.CALENDAR_COLOR
         else:
-            label = "NEXT UP"
+            label = start_time or "NEXT UP"
             label_color = colors.CALENDAR_COLOR
 
         frame.elements.append(
@@ -294,23 +300,28 @@ class LayoutEngine:
         )
         y += 10
 
-        # Event name
+        # Event name — word-wrapped onto as many lines as space allows
         summary = d.get("summary", event.text)
-        # Truncate if too long for display
-        max_chars = self.width // 5  # rough estimate
-        if len(summary) > max_chars:
-            summary = summary[: max_chars - 1] + "."
-        frame.elements.append(
-            TextElement(2, y, summary, "small", colors.WHITE)
-        )
-        y += 10
+        max_line_px = self.width - 4  # 2px margin each side
+        lines = self._word_wrap(summary, max_line_px)
 
-        # Time
-        start_time = d.get("start_time", "")
-        if start_time:
+        # How many summary lines fit in remaining space?
+        line_height = 9
+        max_lines = max(1, (y_end - y) // line_height)
+        lines = lines[:max_lines]
+
+        # If we had to cut lines, truncate the last one with "."
+        if max_lines < len(self._word_wrap(summary, max_line_px)):
+            last = lines[-1]
+            while self._approx_text_width(last + ".") > max_line_px and len(last) > 1:
+                last = last[:-1]
+            lines[-1] = last.rstrip() + "."
+
+        for line in lines:
             frame.elements.append(
-                TextElement(2, y, start_time, "tiny", colors.DIM_GREEN)
+                TextElement(2, y, line, "tiny", colors.WHITE)
             )
+            y += line_height
 
     def _draw_weather_section(
         self,
@@ -319,18 +330,18 @@ class LayoutEngine:
         y_start: int,
         y_end: int,
     ):
-        """Render full weather section."""
+        """Render full weather section (respects y_end boundary)."""
         if not weather:
             return
         d = weather[0].data
         y = y_start + 1
+        line_h = 9  # height of a tiny-font line
 
-        # Weather icon
+        # Weather icon + temperature (always drawn)
         condition = d.get("condition", "").lower()
         icon_name = self._weather_icon(condition)
         frame.elements.append(IconElement(1, y, icon_name, size=8))
 
-        # Temperature
         temp = d.get("temp", "")
         unit = d.get("temp_unit", "F")
         temp_str = f"{temp}{unit}" if temp != "" else ""
@@ -341,24 +352,24 @@ class LayoutEngine:
 
         # Condition text
         cond_text = d.get("condition", "")
-        if cond_text:
+        if cond_text and y + line_h <= y_end:
             frame.elements.append(
                 TextElement(2, y, cond_text, "tiny", colors.DIM_AMBER)
             )
-            y += 9
+            y += line_h
 
         # Wind
         wind_speed = d.get("wind_speed")
         wind_dir = d.get("wind_dir", "")
-        if wind_speed is not None:
+        if wind_speed is not None and y + line_h <= y_end:
             wind_text = f"Wind: {wind_speed} {wind_dir}"
             frame.elements.append(
                 TextElement(2, y, wind_text, "tiny", colors.DIM_WHITE)
             )
-            y += 9
+            y += line_h
 
         # Hi/Lo from forecast (second weather message)
-        if len(weather) > 1:
+        if len(weather) > 1 and y + line_h <= y_end:
             fd = weather[1].data
             hi = fd.get("hi", "")
             lo = fd.get("lo", "")
@@ -415,6 +426,32 @@ class LayoutEngine:
         frame.elements.append(
             TextElement(2, y_start + 2, time_str, "tiny", colors.DIM_WHITE)
         )
+
+    @staticmethod
+    def _approx_text_width(text: str) -> int:
+        """Approximate pixel width using Pillow default font (~6px/char)."""
+        return len(text) * 6
+
+    @classmethod
+    def _word_wrap(cls, text: str, max_px: int) -> list:
+        """Split text into lines that fit within max_px width."""
+        words = text.split()
+        if not words:
+            return [""]
+
+        lines = []
+        current = words[0]
+
+        for word in words[1:]:
+            test = current + " " + word
+            if cls._approx_text_width(test) <= max_px:
+                current = test
+            else:
+                lines.append(current)
+                current = word
+
+        lines.append(current)
+        return lines
 
     @staticmethod
     def _weather_icon(condition: str) -> str:
