@@ -273,13 +273,7 @@ class LayoutEngine:
             )
             y += 9
 
-        # Distance
-        dist = d.get("distance_miles")
-        if dist is not None:
-            frame.elements.append(
-                TextElement(2, y, f"{dist:.1f} mi away", "tiny", colors.DIM_WHITE,
-                            max_width=self.width - 2)
-            )
+        # Route is more useful than distance — distance omitted to save space
 
     def _draw_calendar_section(
         self,
@@ -314,7 +308,7 @@ class LayoutEngine:
             TextElement(11, y, label, "tiny", label_color,
                         max_width=self.width - 11)
         )
-        y += 10
+        y += 9  # tight spacing to keep event name within display bounds
 
         # Event name — word-wrapped onto as many lines as space allows
         summary = d.get("summary", event.text)
