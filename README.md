@@ -60,7 +60,7 @@ sudo make install-python PYTHON=$(which python3)
 
 ```bash
 cd ~
-git clone https://github.com/paradigmshift6/Marquee-Flight-Tracker.git marquee-board
+git clone https://github.com/paradigmshift6/Marquee-board.git marquee-board
 cd marquee-board
 
 python3 -m venv .venv
