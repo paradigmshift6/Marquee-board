@@ -63,12 +63,31 @@ class RouteResolver:
         if self._fetcher and self._fetcher.authenticated:
             # Tier 1: OpenSky /flights/aircraft (most reliable)
             route = self._try_opensky_flights(callsign, icao24)
-            if route:
+
+            # If we only got a partial route (dep but no arr, or vice versa),
+            # try /routes to fill in the gap before accepting it.
+            if route and route.departure_icao and route.arrival_icao:
                 self._cache_route(callsign, route)
                 return route
 
             # Tier 2: OpenSky /routes endpoint (spotty coverage)
-            route = self._try_opensky_routes(callsign)
+            routes_route = self._try_opensky_routes(callsign)
+            if routes_route:
+                # Merge: prefer /routes for a complete picture, but keep
+                # any data from /flights/aircraft that /routes missed.
+                if route:
+                    if not routes_route.departure_icao:
+                        routes_route.departure_icao = route.departure_icao
+                        routes_route.departure_iata = route.departure_iata
+                        routes_route.departure_city = route.departure_city
+                    if not routes_route.arrival_icao:
+                        routes_route.arrival_icao = route.arrival_icao
+                        routes_route.arrival_iata = route.arrival_iata
+                        routes_route.arrival_city = route.arrival_city
+                self._cache_route(callsign, routes_route)
+                return routes_route
+
+            # Accept partial route from tier 1 if tier 2 failed
             if route:
                 self._cache_route(callsign, route)
                 return route
