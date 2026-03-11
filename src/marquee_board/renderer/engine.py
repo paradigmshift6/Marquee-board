@@ -26,6 +26,8 @@ class TextElement:
     text: str
     font_name: str = "small"
     color: Tuple[int, int, int] = colors.WHITE
+    max_width: Optional[int] = None  # px limit; painter truncates or scrolls
+    scroll: bool = False              # True → scroll instead of truncate
 
 
 @dataclass
@@ -122,13 +124,14 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen flight display."""
-        self._draw_flight_section(frame, flight, y_start=0, y_end=self.height - 10)
+        strip_h = 13  # 1px separator + 2px gap + 10px font
+        self._draw_flight_section(frame, flight, y_start=0, y_end=self.height - strip_h)
 
         # Bottom strip: weather summary if available
         if weather:
-            self._draw_weather_strip(frame, weather[0], y_start=self.height - 10)
+            self._draw_weather_strip(frame, weather[0], y_start=self.height - strip_h)
         else:
-            self._draw_clock_strip(frame, y_start=self.height - 9)
+            self._draw_clock_strip(frame, y_start=self.height - strip_h)
 
     def _layout_calendar_full(
         self,
@@ -137,12 +140,13 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen calendar event (urgent)."""
-        self._draw_calendar_section(frame, event, y_start=0, y_end=self.height - 10)
+        strip_h = 13  # 1px separator + 2px gap + 10px font
+        self._draw_calendar_section(frame, event, y_start=0, y_end=self.height - strip_h)
 
         if weather:
-            self._draw_weather_strip(frame, weather[0], y_start=self.height - 10)
+            self._draw_weather_strip(frame, weather[0], y_start=self.height - strip_h)
         else:
-            self._draw_clock_strip(frame, y_start=self.height - 9)
+            self._draw_clock_strip(frame, y_start=self.height - strip_h)
 
     def _layout_calendar_ambient(
         self,
@@ -156,8 +160,8 @@ class LayoutEngine:
 
         # Weather in middle (if available)
         if weather:
-            self._draw_weather_section(frame, weather, y_start=14, y_end=38)
-            cal_start = 38
+            self._draw_weather_section(frame, weather, y_start=14, y_end=44)
+            cal_start = 44
         else:
             cal_start = 16
 
@@ -180,33 +184,39 @@ class LayoutEngine:
         ampm = now.strftime("%p").lower()
         date_str = now.strftime("%a %b %-d")
 
+        clock_x = self.width // 2 - 20
+        ampm_x = clock_x + self._approx_text_width(time_str) + 2
+
         # Large centered clock
         frame.elements.append(
             TextElement(
-                x=self.width // 2 - 20,
+                x=clock_x,
                 y=self.height // 2 - 14,
                 text=time_str,
                 font_name="large",
                 color=colors.CLOCK_COLOR,
+                max_width=self.width - clock_x,
             )
         )
         frame.elements.append(
             TextElement(
-                x=self.width // 2 + 14,
+                x=ampm_x,
                 y=self.height // 2 - 10,
                 text=ampm,
                 font_name="tiny",
                 color=colors.DIM_WHITE,
+                max_width=self.width - ampm_x,
             )
         )
         # Date below
         frame.elements.append(
             TextElement(
-                x=self.width // 2 - 20,
+                x=clock_x,
                 y=self.height // 2 + 4,
                 text=date_str,
                 font_name="small",
                 color=colors.DIM_AMBER,
+                max_width=self.width - clock_x,
             )
         )
 
@@ -228,7 +238,8 @@ class LayoutEngine:
 
         flight_num = d.get("flight_number", "???")
         frame.elements.append(
-            TextElement(11, y, flight_num, "small", colors.FLIGHT_COLOR)
+            TextElement(11, y, flight_num, "small", colors.FLIGHT_COLOR,
+                        max_width=self.width - 11)
         )
 
         y += 10
@@ -244,7 +255,8 @@ class LayoutEngine:
             route_text = ""
         if route_text:
             frame.elements.append(
-                TextElement(2, y, route_text, "small", colors.WHITE)
+                TextElement(2, y, route_text, "small", colors.WHITE,
+                            max_width=self.width - 2)
             )
             y += 10
 
@@ -255,7 +267,8 @@ class LayoutEngine:
         info_parts = [p for p in [alt_str, aircraft] if p]
         if info_parts:
             frame.elements.append(
-                TextElement(2, y, "  ".join(info_parts), "tiny", colors.DIM_CYAN)
+                TextElement(2, y, "  ".join(info_parts), "tiny", colors.DIM_CYAN,
+                            max_width=self.width - 2)
             )
             y += 9
 
@@ -263,7 +276,8 @@ class LayoutEngine:
         dist = d.get("distance_miles")
         if dist is not None:
             frame.elements.append(
-                TextElement(2, y, f"{dist:.1f} mi away", "tiny", colors.DIM_WHITE)
+                TextElement(2, y, f"{dist:.1f} mi away", "tiny", colors.DIM_WHITE,
+                            max_width=self.width - 2)
             )
 
     def _draw_calendar_section(
@@ -296,7 +310,8 @@ class LayoutEngine:
             label_color = colors.CALENDAR_COLOR
 
         frame.elements.append(
-            TextElement(11, y, label, "tiny", label_color)
+            TextElement(11, y, label, "tiny", label_color,
+                        max_width=self.width - 11)
         )
         y += 10
 
@@ -346,15 +361,17 @@ class LayoutEngine:
         unit = d.get("temp_unit", "F")
         temp_str = f"{temp}{unit}" if temp != "" else ""
         frame.elements.append(
-            TextElement(11, y, temp_str, "medium", colors.WEATHER_COLOR)
+            TextElement(11, y, temp_str, "medium", colors.WEATHER_COLOR,
+                        max_width=self.width - 11)
         )
         y += 11
 
-        # Condition text
+        # Condition text (scrolls if long, e.g. "Thunderstorms with Heavy Rain")
         cond_text = d.get("condition", "")
         if cond_text and y + line_h <= y_end:
             frame.elements.append(
-                TextElement(2, y, cond_text, "tiny", colors.DIM_AMBER)
+                TextElement(2, y, cond_text, "tiny", colors.DIM_AMBER,
+                            max_width=self.width - 2, scroll=True)
             )
             y += line_h
 
@@ -364,7 +381,8 @@ class LayoutEngine:
         if wind_speed is not None and y + line_h <= y_end:
             wind_text = f"Wind: {wind_speed} {wind_dir}"
             frame.elements.append(
-                TextElement(2, y, wind_text, "tiny", colors.DIM_WHITE)
+                TextElement(2, y, wind_text, "tiny", colors.DIM_WHITE,
+                            max_width=self.width - 2)
             )
             y += line_h
 
@@ -375,7 +393,8 @@ class LayoutEngine:
             lo = fd.get("lo", "")
             if hi and lo:
                 frame.elements.append(
-                    TextElement(2, y, f"H:{hi} L:{lo}", "tiny", colors.DIM_AMBER)
+                    TextElement(2, y, f"H:{hi} L:{lo}", "tiny", colors.DIM_AMBER,
+                                max_width=self.width - 2)
                 )
 
     def _draw_weather_strip(
@@ -394,7 +413,8 @@ class LayoutEngine:
         condition = d.get("condition", "")
         text = f"{temp}{unit} {condition}" if temp != "" else condition
         frame.elements.append(
-            TextElement(2, y_start + 2, text, "tiny", colors.WEATHER_COLOR)
+            TextElement(2, y_start + 2, text, "tiny", colors.WEATHER_COLOR,
+                        max_width=self.width - 2, scroll=True)
         )
 
     def _draw_clock_section(
@@ -408,12 +428,16 @@ class LayoutEngine:
         time_str = now.strftime("%-I:%M")
         ampm = now.strftime("%p").lower()
 
+        ampm_x = 11 + self._approx_text_width(time_str) + 2
+
         frame.elements.append(IconElement(1, y_start + 1, "clock", size=8))
         frame.elements.append(
-            TextElement(11, y_start + 1, time_str, "medium", colors.CLOCK_COLOR)
+            TextElement(11, y_start + 1, time_str, "medium", colors.CLOCK_COLOR,
+                        max_width=self.width - 11)
         )
         frame.elements.append(
-            TextElement(11 + len(time_str) * 7 + 2, y_start + 3, ampm, "tiny", colors.DIM_WHITE)
+            TextElement(ampm_x, y_start + 3, ampm, "tiny", colors.DIM_WHITE,
+                        max_width=max(1, self.width - ampm_x))
         )
 
     def _draw_clock_strip(self, frame: FrameLayout, y_start: int):
@@ -424,7 +448,8 @@ class LayoutEngine:
             RectElement(0, y_start, self.width, 1, colors.SEPARATOR_COLOR)
         )
         frame.elements.append(
-            TextElement(2, y_start + 2, time_str, "tiny", colors.DIM_WHITE)
+            TextElement(2, y_start + 2, time_str, "tiny", colors.DIM_WHITE,
+                        max_width=self.width - 2)
         )
 
     @staticmethod
