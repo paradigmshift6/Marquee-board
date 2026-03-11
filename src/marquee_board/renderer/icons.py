@@ -114,6 +114,46 @@ CALENDAR_5: Icon = [
     [G,   G,   G,   G,   G  ],
 ]
 
+CLOUD_5: Icon = [
+    [OFF, W,   W,   OFF, OFF],
+    [W,   W,   W,   W,   OFF],
+    [W,   W,   W,   W,   W  ],
+    [W,   W,   W,   W,   W  ],
+    [OFF, OFF, OFF, OFF, OFF],
+]
+
+RAIN_5: Icon = [
+    [OFF, W,   W,   W,   OFF],
+    [W,   W,   W,   W,   W  ],
+    [OFF, OFF, OFF, OFF, OFF],
+    [OFF, B,   OFF, B,   OFF],
+    [B,   OFF, B,   OFF, B  ],
+]
+
+SNOW_5: Icon = [
+    [OFF, W,   W,   W,   OFF],
+    [W,   W,   W,   W,   W  ],
+    [OFF, OFF, OFF, OFF, OFF],
+    [W,   OFF, W,   OFF, W  ],
+    [OFF, W,   OFF, W,   OFF],
+]
+
+STORM_5: Icon = [
+    [W,   W,   W,   W,   W  ],
+    [W,   W,   W,   W,   W  ],
+    [OFF, OFF, Y,   OFF, OFF],
+    [OFF, Y,   Y,   OFF, OFF],
+    [OFF, OFF, Y,   OFF, OFF],
+]
+
+FOG_5: Icon = [
+    [OFF, OFF, OFF, OFF, OFF],
+    [W,   W,   W,   W,   W  ],
+    [OFF, OFF, OFF, OFF, OFF],
+    [OFF, W,   W,   W,   OFF],
+    [OFF, OFF, OFF, OFF, OFF],
+]
+
 # Lookup tables
 ICONS_8: Dict[str, Icon] = {
     "plane": PLANE_8,
@@ -128,7 +168,31 @@ ICONS_5: Dict[str, Icon] = {
     "plane": PLANE_5,
     "sun": SUN_5,
     "calendar": CALENDAR_5,
+    "cloud": CLOUD_5,
+    "rain": RAIN_5,
+    "snow": SNOW_5,
+    "storm": STORM_5,
+    "fog": FOG_5,
 }
+
+
+def condition_to_icon(condition: str) -> str:
+    """Map a weather condition string to an icon name.
+
+    Matches common OpenWeatherMap condition descriptions.
+    """
+    c = condition.lower()
+    if any(k in c for k in ("thunder", "storm")):
+        return "storm"
+    if any(k in c for k in ("rain", "drizzle", "shower")):
+        return "rain"
+    if any(k in c for k in ("snow", "sleet", "blizzard")):
+        return "snow"
+    if any(k in c for k in ("fog", "mist", "haze", "smoke")):
+        return "fog"
+    if any(k in c for k in ("cloud", "overcast")):
+        return "cloud"
+    return "sun"  # clear / default
 
 
 def get_icon(name: str, size: int = 8) -> Icon:

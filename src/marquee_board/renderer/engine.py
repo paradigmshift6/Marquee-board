@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..providers.base import MarqueeMessage, Priority
 from . import colors
+from .icons import condition_to_icon
 
 logger = logging.getLogger(__name__)
 
@@ -403,19 +404,27 @@ class LayoutEngine:
         weather: MarqueeMessage,
         y_start: int,
     ):
-        """Compact single-line weather at the bottom."""
+        """Compact single-line weather at the bottom: icon + temp."""
         d = weather.data
         frame.elements.append(
             RectElement(0, y_start, self.width, 1, colors.SEPARATOR_COLOR)
         )
+
+        # Weather condition icon (5x5) — replaces condition text to save space
+        condition = d.get("condition", "")
+        icon_name = condition_to_icon(condition)
+        icon_y = y_start + 3  # vertically center 5px icon in the 12px strip
+        frame.elements.append(IconElement(2, icon_y, icon_name, size=5))
+
+        # Temperature text after icon
         temp = d.get("temp", "")
         unit = d.get("temp_unit", "F")
-        condition = d.get("condition", "")
-        text = f"{temp}{unit} {condition}" if temp != "" else condition
-        frame.elements.append(
-            TextElement(2, y_start + 2, text, "tiny", colors.WEATHER_COLOR,
-                        max_width=self.width - 2, scroll=True)
-        )
+        text_x = 9  # 2px pad + 5px icon + 2px gap
+        if temp != "":
+            frame.elements.append(
+                TextElement(text_x, y_start + 2, f"{temp}{unit}", "tiny",
+                            colors.WEATHER_COLOR, max_width=self.width - text_x)
+            )
 
     def _draw_clock_section(
         self,
