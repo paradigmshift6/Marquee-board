@@ -5,7 +5,8 @@ Uses a tiered approach:
 2. Disk cache from previous resolutions
 3. OpenSky /flights/aircraft endpoint (most reliable, needs auth)
 4. OpenSky /routes endpoint (needs auth, spotty coverage)
-5. Graceful degradation (no route)
+5. Historical departures from local airport (same callsign = same route daily)
+6. Graceful degradation (no route)
 """
 from __future__ import annotations
 
@@ -31,15 +32,20 @@ class RouteResolver:
         airport_db: "AirportDB",
         fetcher: Optional["OpenSkyFetcher"] = None,
         cache_ttl_hours: int = 24,
+        local_airport: Optional[str] = None,
     ):
         self._cache_dir = cache_dir
         self._airport_db = airport_db
         self._fetcher = fetcher
         self._cache_ttl = cache_ttl_hours * 3600
+        self._local_airport = local_airport
         self._memory_cache: dict[str, RouteInfo] = {}
         self._disk_cache = self._load_disk_cache()
         self._failed_lookups: dict[str, float] = {}  # callsign -> timestamp
         self._fail_cooldown = 600  # Don't retry failed lookups for 10 min
+        # Historical callsign→arrival mapping from local airport departures
+        self._historical_routes: dict[str, str] = {}  # callsign -> arrival ICAO
+        self._historical_loaded: float = 0.0
 
     def resolve(self, callsign: str, icao24: str) -> Optional[RouteInfo]:
         # Memory cache (instant)
@@ -60,12 +66,13 @@ class RouteResolver:
             if time.time() - self._failed_lookups[callsign] < self._fail_cooldown:
                 return None
 
+        route = None  # partial result from tier 1
+
         if self._fetcher and self._fetcher.authenticated:
             # Tier 1: OpenSky /flights/aircraft (most reliable)
             route = self._try_opensky_flights(callsign, icao24)
 
-            # If we only got a partial route (dep but no arr, or vice versa),
-            # try /routes to fill in the gap before accepting it.
+            # Complete route — cache and return immediately
             if route and route.departure_icao and route.arrival_icao:
                 self._cache_route(callsign, route)
                 return route
@@ -87,10 +94,24 @@ class RouteResolver:
                 self._cache_route(callsign, routes_route)
                 return routes_route
 
-            # Accept partial route from tier 1 if tier 2 failed
-            if route:
-                self._cache_route(callsign, route)
-                return route
+            # Tier 3: Historical departures from local airport.
+            # Completed flights from previous days have arrival data,
+            # and most commercial flights fly the same route daily.
+            if self._local_airport:
+                hist_route = self._try_historical_departures(callsign)
+                if hist_route:
+                    # Merge with any partial tier-1 data
+                    if route and not hist_route.departure_icao:
+                        hist_route.departure_icao = route.departure_icao
+                        hist_route.departure_iata = route.departure_iata
+                        hist_route.departure_city = route.departure_city
+                    self._cache_route(callsign, hist_route)
+                    return hist_route
+
+        # Accept partial route if nothing else worked
+        if route:
+            self._cache_route(callsign, route)
+            return route
 
         # Mark as failed
         self._failed_lookups[callsign] = time.time()
@@ -165,6 +186,86 @@ class RouteResolver:
             arrival_icao=arr_icao,
             arrival_iata=arr_airport.iata if arr_airport else None,
             arrival_city=arr_airport.city if arr_airport else None,
+        )
+
+    # --- Tier 3: Historical departure lookup ---
+
+    def _try_historical_departures(self, callsign: str) -> Optional[RouteInfo]:
+        """Look up route from historical departure data.
+
+        Most commercial flights fly the same route daily.  By checking
+        completed flights from the local airport in the previous 1-2 days,
+        we can find the likely arrival airport for callsigns currently in
+        the air.
+        """
+        # Refresh historical data every 6 hours
+        if time.time() - self._historical_loaded > 6 * 3600:
+            self._load_historical_departures()
+
+        arr_icao = self._historical_routes.get(callsign)
+        if not arr_icao:
+            return None
+
+        dep_icao = self._local_airport
+        dep_airport = self._airport_db.lookup(dep_icao) if dep_icao else None
+        arr_airport = self._airport_db.lookup(arr_icao)
+
+        logger.info(
+            "Resolved route via historical departures: %s → %s (%s)",
+            dep_icao or "???",
+            arr_icao,
+            callsign,
+        )
+
+        return RouteInfo(
+            departure_icao=dep_icao,
+            departure_iata=dep_airport.iata if dep_airport else None,
+            departure_city=dep_airport.city if dep_airport else None,
+            arrival_icao=arr_icao,
+            arrival_iata=arr_airport.iata if arr_airport else None,
+            arrival_city=arr_airport.city if arr_airport else None,
+        )
+
+    def _load_historical_departures(self):
+        """Fetch recent departures from local airport, build callsign→arrival map."""
+        if not self._fetcher or not self._local_airport:
+            return
+
+        now = int(time.time())
+        # OpenSky allows querying across at most 2 calendar-day partitions.
+        # Query previous ~24h to stay within the 2-partition limit.
+        begin = now - 86400
+        end = now
+
+        logger.info(
+            "Loading historical departures from %s ...", self._local_airport
+        )
+        flights = self._fetcher.fetch_departures(
+            self._local_airport, begin, end
+        )
+
+        if not flights:
+            logger.info("No historical departures returned (may retry)")
+            # Use a short backoff (5 min) so we retry soon if rate-limited,
+            # instead of waiting the full 6 hours.
+            self._historical_loaded = time.time() - 6 * 3600 + 300
+            return
+
+        mapping: dict[str, str] = {}
+        for f in flights:
+            cs = (f.get("callsign") or "").strip()
+            arr = f.get("estArrivalAirport")
+            if cs and arr:
+                # Keep the most recent entry per callsign
+                mapping[cs] = arr
+
+        self._historical_routes = mapping
+        self._historical_loaded = time.time()
+        logger.info(
+            "Loaded %d historical routes from %s (%d departures total)",
+            len(mapping),
+            self._local_airport,
+            len(flights),
         )
 
     def _cache_route(self, callsign: str, route: RouteInfo):

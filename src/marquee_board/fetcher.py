@@ -165,6 +165,40 @@ class OpenSkyFetcher:
 
         return None
 
+    def fetch_departures(self, airport: str, begin: int, end: int) -> Optional[list]:
+        """Fetch departures from an airport in a time window.
+
+        Returns a list of flight dicts with estDepartureAirport and
+        estArrivalAirport.  Completed flights usually have both.
+        """
+        if not self.authenticated:
+            return None
+
+        try:
+            headers = self._auth_headers()
+            resp = self._client.get(
+                f"{OPENSKY_BASE}/flights/departure",
+                params={
+                    "airport": airport,
+                    "begin": begin,
+                    "end": end,
+                },
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 429:
+                logger.warning("Rate limited on departure lookup for %s", airport)
+            else:
+                logger.debug(
+                    "Departure lookup %s returned %d: %s",
+                    airport, resp.status_code, resp.text[:200],
+                )
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            logger.debug("Departure lookup failed for %s: %s", airport, e)
+
+        return None
+
     # --- OAuth2 token management ---
 
     def _auth_headers(self) -> dict:

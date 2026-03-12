@@ -36,6 +36,7 @@ class FlightEnricher:
             cache_dir=cache_dir,
             airport_db=self._airport_db,
             fetcher=fetcher,
+            local_airport=local_airport,
         )
 
     def enrich(self, state: RawAircraftState) -> EnrichedFlight:
