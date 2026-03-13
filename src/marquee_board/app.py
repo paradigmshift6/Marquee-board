@@ -1,6 +1,7 @@
 import logging
 import signal
 import time
+from datetime import datetime
 from typing import Dict, List
 
 from .config import AppConfig
@@ -16,6 +17,7 @@ class MarqueeBoardApp:
         self._providers: List[MarqueeProvider] = []
         self._display = self._build_display(config)
         self._running = False
+        self._sleeping = False
         self._init_providers(config)
 
     def run(self):
@@ -36,6 +38,18 @@ class MarqueeBoardApp:
 
         while self._running:
             try:
+                if not self._is_active():
+                    if not self._sleeping:
+                        logger.info("Outside active hours — entering sleep mode")
+                        self._sleeping = True
+                        self._display.update({}, {}, structured=[])
+                    time.sleep(30)
+                    continue
+
+                if self._sleeping:
+                    logger.info("Active hours — waking up")
+                    self._sleeping = False
+
                 grouped: Dict[str, List[str]] = {}
                 display_names: Dict[str, str] = {}
                 all_messages: List[MarqueeMessage] = []
@@ -54,6 +68,28 @@ class MarqueeBoardApp:
                 logger.exception("Error in main loop")
 
             time.sleep(2)
+
+    def _is_active(self) -> bool:
+        """Check if current time is within configured active hours."""
+        sched = self._config.schedule
+        if not sched.enabled:
+            return True
+
+        try:
+            start = datetime.strptime(sched.active_start, "%H:%M").time()
+            end = datetime.strptime(sched.active_end, "%H:%M").time()
+        except ValueError:
+            logger.warning("Invalid schedule times, staying active")
+            return True
+
+        now = datetime.now().time()
+
+        if start <= end:
+            # Normal range, e.g. 06:30 - 18:00
+            return start <= now <= end
+        else:
+            # Overnight range, e.g. 22:00 - 06:00
+            return now >= start or now <= end
 
     def _init_providers(self, config: AppConfig):
         if config.flights.enabled:

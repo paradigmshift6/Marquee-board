@@ -33,3 +33,9 @@ opensky:
 enrichment:
   cache_dir: data
   cache_ttl_hours: 168       # Re-download reference databases weekly
+
+# Schedule: automatically turn the board on/off at certain times
+schedule:
+  enabled: false              # Set true to enable active-hours schedule
+  active_start: "06:30"       # HH:MM local time — board turns on
+  active_end: "18:00"         # HH:MM local time — board turns off

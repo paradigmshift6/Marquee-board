@@ -73,6 +73,13 @@ class CalendarConfig:
 
 
 @dataclass
+class ScheduleConfig:
+    enabled: bool = False
+    active_start: str = "06:30"   # HH:MM local time
+    active_end: str = "18:00"
+
+
+@dataclass
 class RendererConfig:
     width: int = 64
     height: int = 64
@@ -92,6 +99,7 @@ class AppConfig:
     weather: WeatherConfig = field(default_factory=WeatherConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
     renderer: RendererConfig = field(default_factory=RendererConfig)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
 
 
 def load_config(path: str) -> AppConfig:
@@ -178,6 +186,13 @@ def load_config(path: str) -> AppConfig:
             height=rend.get("height", 64),
             brightness=rend.get("brightness", 80),
             gpio_slowdown=rend.get("gpio_slowdown", 4),
+        )
+
+    if sched := raw.get("schedule"):
+        config.schedule = ScheduleConfig(
+            enabled=sched.get("enabled", False),
+            active_start=str(sched.get("active_start", "06:30")),
+            active_end=str(sched.get("active_end", "18:00")),
         )
 
     if config.location.latitude == 0.0 and config.location.longitude == 0.0:
