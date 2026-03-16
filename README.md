@@ -37,16 +37,32 @@ sudo apt-get install -y python3 python3-pip python3-venv git
 
 ### 2. RGB Matrix Driver
 
-Install the [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library:
+Install the [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library.
+
+> **Note:** Recent versions of the library switched from a Makefile-based Python build to CMake + scikit-build-core. The old `make build-python` command no longer exists. Use `pip install .` instead.
 
 ```bash
-# Clone and build the RGB matrix driver
+# Install build tools
+sudo apt-get install -y cmake ninja-build
+
+# Clone the library
 cd ~
 git clone https://github.com/hzeller/rpi-rgb-led-matrix.git
 cd rpi-rgb-led-matrix
-make build-python PYTHON=$(which python3)
-sudo make install-python PYTHON=$(which python3)
+
+# Pillow 10+ removed internal C headers that the Python bindings need.
+# Download them from the last Pillow version that included them:
+SHIMS=bindings/python/rgbmatrix/shims
+for f in Imaging.h ImPlatform.h ImagingUtils.h; do
+  wget -q -O $SHIMS/$f \
+    https://raw.githubusercontent.com/python-pillow/Pillow/9.5.0/src/libImaging/$f
+done
+
+# Build and install into the marquee-board venv
+/home/levi/marquee-board/.venv/bin/pip install .
 ```
+
+> **Why the header fix?** The Python bindings include a `pillow.c` shim that requires `Imaging.h`, `ImPlatform.h`, and `ImagingUtils.h`. Pillow removed these internal C headers in version 10.0. Downloading them from Pillow 9.5.0 source is the cleanest workaround without patching the rpi-rgb-led-matrix source.
 
 > **Important:** Disable the Raspberry Pi's onboard sound to avoid GPIO conflicts:
 > ```bash

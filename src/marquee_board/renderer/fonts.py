@@ -55,7 +55,12 @@ class FontManager:
     def _try_load(self, name: str) -> ImageFont.ImageFont:
         # Try BDF font first
         bdf_path = _FONT_DIR / f"{name}.bdf"
-        if bdf_path.exists():
+        try:
+            bdf_exists = bdf_path.exists()
+        except OSError:
+            # Python 3.13+ raises PermissionError instead of returning False
+            bdf_exists = False
+        if bdf_exists:
             try:
                 font = ImageFont.load(str(bdf_path))
                 logger.debug("Loaded BDF font: %s", bdf_path)
