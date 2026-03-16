@@ -299,6 +299,7 @@ Then open `http://<your-pi-ip>:5050/simulator` in a browser.
 | `renderer.height` | | `64` | Matrix height in pixels |
 | `renderer.brightness` | | `80` | LED brightness (0-100) |
 | `renderer.gpio_slowdown` | | `4` | GPIO timing (increase if flickering) |
+| `renderer.hardware_mapping` | | `adafruit-hat` | `adafruit-hat`, `adafruit-hat-pwm`, or `regular` |
 | `schedule.enabled` | | `false` | Enable active hours schedule |
 | `schedule.active_start` | | `06:30` | Time to turn on (HH:MM, 24h) |
 | `schedule.active_end` | | `18:00` | Time to turn off (HH:MM, 24h) |
@@ -330,4 +331,9 @@ Then open `http://<your-pi-ip>:5050/simulator` in a browser.
 - Set `PORT=5050` environment variable or change `web.port` in config
 
 **"Permission denied" when running LED display**
-- The LED driver requires root access for GPIO: use `sudo`
+- The LED driver requires root access for GPIO: use `sudo -E /path/to/.venv/bin/python`
+- Using plain `sudo` drops the environment; `-E` preserves it (needed for SSL certs with Google Calendar)
+
+**Display is blank / nothing visible**
+- Check `renderer.hardware_mapping` in `config.yaml` — Adafruit RGB Matrix Bonnet needs `adafruit-hat`; direct wiring needs `regular`
+- Make sure `fonts-dejavu-core` is installed: `sudo apt-get install -y fonts-dejavu-core`

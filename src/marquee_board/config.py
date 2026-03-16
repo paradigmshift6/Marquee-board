@@ -86,6 +86,7 @@ class RendererConfig:
     height: int = 64
     brightness: int = 80
     gpio_slowdown: int = 4
+    hardware_mapping: str = "adafruit-hat"  # "regular" | "adafruit-hat" | "adafruit-hat-pwm"
 
 
 @dataclass
@@ -187,6 +188,7 @@ def load_config(path: str) -> AppConfig:
             height=rend.get("height", 64),
             brightness=rend.get("brightness", 80),
             gpio_slowdown=rend.get("gpio_slowdown", 4),
+            hardware_mapping=rend.get("hardware_mapping", "adafruit-hat"),
         )
 
     if sched := raw.get("schedule"):

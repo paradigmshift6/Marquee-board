@@ -20,11 +20,13 @@ class LEDDisplay(DisplayBackend):
         height: int = 64,
         brightness: int = 80,
         gpio_slowdown: int = 4,
+        hardware_mapping: str = "adafruit-hat",
     ):
         self._width = width
         self._height = height
         self._brightness = brightness
         self._gpio_slowdown = gpio_slowdown
+        self._hardware_mapping = hardware_mapping
         self._matrix = None
         self._engine = None
         self._painter = None
@@ -46,7 +48,7 @@ class LEDDisplay(DisplayBackend):
             options.cols = self._width
             options.brightness = self._brightness
             options.gpio_slowdown = self._gpio_slowdown
-            options.hardware_mapping = "regular"
+            options.hardware_mapping = self._hardware_mapping
 
             self._matrix = RGBMatrix(options=options)
             logger.info(

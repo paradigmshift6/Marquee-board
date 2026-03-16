@@ -40,6 +40,7 @@ renderer:
   height: 32                  # Common sizes: 32 (64x32 panel) or 64 (64x64 panel)
   brightness: 80              # 0-100
   gpio_slowdown: 4            # Increase to 5 if you see flickering
+  hardware_mapping: adafruit-hat  # adafruit-hat | adafruit-hat-pwm | regular
 
 flights:
   enabled: true
