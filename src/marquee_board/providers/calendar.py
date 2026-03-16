@@ -82,6 +82,7 @@ class CalendarProvider(MarqueeProvider):
     def _build_session(self):
         """Build an authorized requests session using google-auth (no httplib2)."""
         try:
+            import requests as req_lib
             from google.auth.transport.requests import Request, AuthorizedSession
             from google.oauth2.credentials import Credentials
             from google_auth_oauthlib.flow import InstalledAppFlow
@@ -92,6 +93,14 @@ class CalendarProvider(MarqueeProvider):
             )
             return None
 
+        # Resolve a working CA bundle — certifi's can be broken in sudo venvs
+        ca_bundle = self._find_ca_bundle()
+
+        # Auth request session (used internally for token refresh)
+        auth_sess = req_lib.Session()
+        auth_sess.verify = ca_bundle
+        auth_request = Request(session=auth_sess)
+
         creds = None
         token_path = Path(self._token_file)
 
@@ -100,7 +109,7 @@ class CalendarProvider(MarqueeProvider):
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+                creds.refresh(auth_request)
             else:
                 creds_path = Path(self._credentials_file)
                 if not creds_path.exists():
@@ -119,7 +128,29 @@ class CalendarProvider(MarqueeProvider):
             token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(creds.to_json())
 
-        return AuthorizedSession(creds)
+        session = AuthorizedSession(creds, auth_request=auth_request)
+        session.verify = ca_bundle
+        return session
+
+    @staticmethod
+    def _find_ca_bundle() -> str:
+        """Return path to a working CA certificate bundle."""
+        # Prefer system CA bundle (always works on Debian/Pi OS)
+        for path in (
+            "/etc/ssl/certs/ca-certificates.crt",  # Debian/Ubuntu/Pi OS
+            "/etc/pki/tls/certs/ca-bundle.crt",     # RHEL/Fedora
+        ):
+            if os.path.isfile(path):
+                return path
+        # Fallback to certifi
+        try:
+            import certifi
+            ca = certifi.where()
+            if os.path.isfile(ca):
+                return ca
+        except Exception:
+            pass
+        return True  # Let requests figure it out
 
     def _fetch_events(self) -> List[MarqueeMessage]:
         now = datetime.now(timezone.utc)
