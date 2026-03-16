@@ -1,4 +1,8 @@
-"""Google Calendar provider using OAuth2 browser flow."""
+"""Google Calendar provider using OAuth2 browser flow.
+
+Uses google-auth + requests directly instead of google-api-python-client
+to avoid the httplib2 SSL compatibility issues on Python 3.13 + sudo.
+"""
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -11,6 +15,7 @@ from ..config import AppConfig
 logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+_CALENDAR_API = "https://www.googleapis.com/calendar/v3/calendars/{}/events"
 
 
 class CalendarProvider(MarqueeProvider):
@@ -20,7 +25,7 @@ class CalendarProvider(MarqueeProvider):
         self._calendar_id = config.calendar.calendar_id
         self._lookahead_hours = config.calendar.lookahead_hours
         self._poll_interval = config.calendar.poll_interval
-        self._service = None
+        self._session = None
         self._last_fetch: float = 0.0
         self._cached_messages: List[MarqueeMessage] = []
 
@@ -33,7 +38,7 @@ class CalendarProvider(MarqueeProvider):
         return "Upcoming Events"
 
     def start(self) -> None:
-        self._service = self._build_service()
+        self._session = self._build_session()
         logger.info("Calendar provider started (calendar: %s)", self._calendar_id)
 
     def fetch_messages(self) -> List[MarqueeMessage]:
@@ -41,7 +46,7 @@ class CalendarProvider(MarqueeProvider):
         if self._cached_messages and (now - self._last_fetch) < self._poll_interval:
             return self._cached_messages
 
-        if not self._service:
+        if not self._session:
             return self._cached_messages
 
         try:
@@ -56,17 +61,16 @@ class CalendarProvider(MarqueeProvider):
     def stop(self) -> None:
         pass
 
-    def _build_service(self):
+    def _build_session(self):
+        """Build an authorized requests session using google-auth (no httplib2)."""
         try:
-            from google.auth.transport.requests import Request
+            from google.auth.transport.requests import Request, AuthorizedSession
             from google.oauth2.credentials import Credentials
             from google_auth_oauthlib.flow import InstalledAppFlow
-            from googleapiclient.discovery import build
         except ImportError:
             logger.error(
-                "Calendar provider requires google-auth-oauthlib and "
-                "google-api-python-client. Install with: "
-                "pip install marquee-board[calendar]"
+                "Calendar provider requires google-auth-oauthlib. "
+                "Install with: pip install marquee-board[calendar]"
             )
             return None
 
@@ -97,24 +101,27 @@ class CalendarProvider(MarqueeProvider):
             token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(creds.to_json())
 
-        return build("calendar", "v3", credentials=creds)
+        return AuthorizedSession(creds)
 
     def _fetch_events(self) -> List[MarqueeMessage]:
         now = datetime.now(timezone.utc)
         time_max = now + timedelta(hours=self._lookahead_hours)
 
-        result = self._service.events().list(
-            calendarId=self._calendar_id,
-            timeMin=now.isoformat(),
-            timeMax=time_max.isoformat(),
-            maxResults=10,
-            singleEvents=True,
-            orderBy="startTime",
-        ).execute()
+        url = _CALENDAR_API.format(self._calendar_id)
+        response = self._session.get(
+            url,
+            params={
+                "timeMin": now.isoformat(),
+                "timeMax": time_max.isoformat(),
+                "maxResults": 10,
+                "singleEvents": True,
+                "orderBy": "startTime",
+            },
+        )
+        response.raise_for_status()
+        events = response.json().get("items", [])
 
-        events = result.get("items", [])
         messages = []
-
         for event in events:
             msg = self._build_message(event, now)
             if msg:
