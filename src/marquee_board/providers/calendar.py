@@ -4,10 +4,28 @@ Uses google-auth + requests directly instead of google-api-python-client
 to avoid the httplib2 SSL compatibility issues on Python 3.13 + sudo.
 """
 import logging
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
+
+# certifi's cacert.pem can be missing in venvs partially built under sudo.
+# Set REQUESTS_CA_BUNDLE to the system CA bundle as a fallback — this is
+# checked by requests at the lowest level (before session.verify).
+_SYSTEM_CA = "/etc/ssl/certs/ca-certificates.crt"
+if "REQUESTS_CA_BUNDLE" not in os.environ:
+    try:
+        import certifi
+        _ca = certifi.where()
+        if not os.path.isfile(_ca):
+            raise FileNotFoundError(_ca)
+    except Exception:
+        if os.path.isfile(_SYSTEM_CA):
+            os.environ["REQUESTS_CA_BUNDLE"] = _SYSTEM_CA
+            logging.getLogger(__name__).debug(
+                "certifi CA bundle missing; using system CA: %s", _SYSTEM_CA
+            )
 
 from .base import MarqueeMessage, MarqueeProvider, Priority
 from ..config import AppConfig
@@ -101,20 +119,7 @@ class CalendarProvider(MarqueeProvider):
             token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(creds.to_json())
 
-        session = AuthorizedSession(creds)
-        # certifi's cacert.pem is sometimes absent in venvs built under sudo.
-        # Fall back to the system CA bundle (always present on Debian/Pi OS).
-        _SYSTEM_CA = "/etc/ssl/certs/ca-certificates.crt"
-        try:
-            import certifi
-            ca_bundle = certifi.where()
-            import os
-            if not os.path.exists(ca_bundle):
-                raise FileNotFoundError(ca_bundle)
-        except Exception:
-            ca_bundle = _SYSTEM_CA
-        session.verify = ca_bundle
-        return session
+        return AuthorizedSession(creds)
 
     def _fetch_events(self) -> List[MarqueeMessage]:
         now = datetime.now(timezone.utc)
