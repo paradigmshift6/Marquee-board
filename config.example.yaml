@@ -34,6 +34,32 @@ enrichment:
   cache_dir: data
   cache_ttl_hours: 168       # Re-download reference databases weekly
 
+# LED matrix dimensions — must match your physical panel
+renderer:
+  width: 64
+  height: 32                  # Common sizes: 32 (64x32 panel) or 64 (64x64 panel)
+  brightness: 80              # 0-100
+  gpio_slowdown: 4            # Increase to 5 if you see flickering
+
+flights:
+  enabled: true
+
+# Optional: OpenWeatherMap — https://openweathermap.org/api
+weather:
+  enabled: false
+  api_key: null
+  poll_interval: 300          # Seconds between weather updates
+  units: imperial             # imperial | metric
+
+# Optional: Google Calendar — see README for OAuth2 setup
+calendar:
+  enabled: false
+  credentials_file: credentials.json
+  token_file: data/calendar_token.json
+  calendar_id: primary
+  lookahead_hours: 24
+  poll_interval: 60
+
 # Schedule: automatically turn the board on/off at certain times
 schedule:
   enabled: false              # Set true to enable active-hours schedule

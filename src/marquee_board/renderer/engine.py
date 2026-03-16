@@ -125,7 +125,7 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen flight display."""
-        strip_h = 13  # 1px separator + 2px gap + 10px font
+        strip_h = 10 if self.height <= 32 else 13  # smaller strip on short panels
         self._draw_flight_section(frame, flight, y_start=0, y_end=self.height - strip_h)
 
         # Bottom strip: weather summary if available
@@ -141,7 +141,7 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen calendar event (urgent)."""
-        strip_h = 13  # 1px separator + 2px gap + 10px font
+        strip_h = 10 if self.height <= 32 else 13  # smaller strip on short panels
         self._draw_calendar_section(frame, event, y_start=0, y_end=self.height - strip_h)
 
         if weather:
@@ -159,14 +159,17 @@ class LayoutEngine:
         # Clock at top
         self._draw_clock_section(frame, y_start=0, y_end=14)
 
-        # Weather in middle (if available)
-        if weather:
-            self._draw_weather_section(frame, weather, y_start=14, y_end=44)
-            cal_start = 44
+        # Weather in middle — only on tall panels (64x64+).
+        # On short panels (64x32), skip weather here so the calendar event
+        # has enough vertical room to actually render.
+        if weather and self.height >= 48:
+            weather_end = min(self.height - 20, 44)
+            self._draw_weather_section(frame, weather, y_start=14, y_end=weather_end)
+            cal_start = weather_end
         else:
-            cal_start = 16
+            cal_start = 14
 
-        # Calendar event — gets more space when weather absent
+        # Calendar event — gets full remaining space
         self._draw_calendar_section(frame, event, y_start=cal_start, y_end=self.height)
 
     def _layout_weather_full(
@@ -230,22 +233,20 @@ class LayoutEngine:
         y_start: int,
         y_end: int,
     ):
-        """Render a flight info section."""
+        """Render a flight info section, clipping content to y_end."""
         d = flight.data
         y = y_start + 1
 
-        # Icon + flight number
+        # Icon + flight number (row 1 — always draw if section has any height)
         frame.elements.append(IconElement(1, y, "plane", size=8))
-
         flight_num = d.get("flight_number", "???")
         frame.elements.append(
             TextElement(11, y, flight_num, "small", colors.FLIGHT_COLOR,
                         max_width=self.width - 11)
         )
-
         y += 10
 
-        # Route
+        # Route (row 2 — only if it fits within y_end)
         dep = d.get("route_dep", "")
         arr = d.get("route_arr", "")
         if dep and arr:
@@ -254,26 +255,23 @@ class LayoutEngine:
             route_text = dep or arr
         else:
             route_text = ""
-        if route_text:
+        if route_text and y + 9 <= y_end:
             frame.elements.append(
                 TextElement(2, y, route_text, "small", colors.WHITE,
                             max_width=self.width - 2)
             )
             y += 10
 
-        # Altitude + aircraft type
+        # Altitude + aircraft type (row 3 — only if it fits within y_end)
         alt = d.get("altitude_feet")
         aircraft = d.get("aircraft_type", "")
         alt_str = f"{alt:,}ft" if alt else ""
         info_parts = [p for p in [alt_str, aircraft] if p]
-        if info_parts:
+        if info_parts and y + 7 <= y_end:
             frame.elements.append(
                 TextElement(2, y, "  ".join(info_parts), "tiny", colors.DIM_CYAN,
                             max_width=self.width - 2)
             )
-            y += 9
-
-        # Route is more useful than distance — distance omitted to save space
 
     def _draw_calendar_section(
         self,
