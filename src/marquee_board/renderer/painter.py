@@ -161,20 +161,25 @@ class FramePainter:
 
         offset = max(0, min(offset, overflow))
 
-        _, text_h = self._fonts.measure(el.text, el.font_name)
         pad = 4
 
-        # Render full text to a greyscale scratch surface and threshold
-        tmp_gray = Image.new("L", (text_w + pad, text_h + pad), 0)
-        ImageDraw.Draw(tmp_gray).text((0, 0), el.text, fill=255, font=font)
-        alpha_full = tmp_gray.point(lambda p: 255 if p > 127 else 0)
+        # Use the full image height as scratch canvas height (same strategy as
+        # _render_sharp).  Drawing at (0, el.y) means the character pixels land
+        # at the correct vertical position without needing an accurate text_h
+        # measurement — getbbox() on BDF bitmap fonts can return a tight bounding
+        # box that clips descenders/ascenders when used as a canvas height.
+        tmp_gray = Image.new("L", (text_w + pad, img.height), 0)
+        ImageDraw.Draw(tmp_gray).text((0, el.y), el.text, fill=255, font=font)
+        # Match the threshold used by _render_sharp (40) so scrolling and static
+        # text have identical stroke fidelity.
+        alpha_full = tmp_gray.point(lambda p: 255 if p > 40 else 0)
 
-        # Crop to the visible window
+        # Crop only horizontally to the visible window; preserve full height
         crop_right = min(offset + el.max_width, text_w + pad)
-        alpha_crop = alpha_full.crop((offset, 0, crop_right, text_h + pad))
+        alpha_crop = alpha_full.crop((offset, 0, crop_right, img.height))
 
         colored = Image.new("RGB", alpha_crop.size, el.color[:3])
-        img.paste(colored, (el.x, el.y), alpha_crop)
+        img.paste(colored, (el.x, 0), alpha_crop)
 
     def _draw_icon(self, img: Image.Image, el: IconElement):
         icon_data = get_icon(el.icon_name, el.size)
