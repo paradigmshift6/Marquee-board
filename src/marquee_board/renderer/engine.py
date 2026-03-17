@@ -246,7 +246,9 @@ class LayoutEngine:
     ):
         """Render a flight info section, clipping content to y_end."""
         d = flight.data
-        y = y_start + 1
+        # Start flush at y_start (no top margin).  y_end is exclusive — the
+        # separator line sits exactly at y_end, so content must stay < y_end.
+        y = y_start
 
         # Icon + flight number (row 1 — always draw if section has any height)
         frame.elements.append(IconElement(1, y, "plane", size=8))
@@ -257,7 +259,8 @@ class LayoutEngine:
         )
         y += 10
 
-        # Route (row 2 — only if it fits within y_end)
+        # Route (row 2 — only if bottom pixel stays strictly inside y_end)
+        # "small" (6x10) is 10 px tall; bottom pixel is at y+9, must be < y_end.
         dep = d.get("route_dep", "")
         arr = d.get("route_arr", "")
         if dep and arr:
@@ -266,19 +269,19 @@ class LayoutEngine:
             route_text = dep or arr
         else:
             route_text = ""
-        if route_text and y + 9 <= y_end:
+        if route_text and y + 9 < y_end:
             frame.elements.append(
                 TextElement(2, y, route_text, "small", colors.WHITE,
                             max_width=self.width - 2)
             )
             y += 10
 
-        # Altitude + aircraft type (row 3 — only if it fits within y_end)
+        # Altitude + aircraft type (row 3 — "tiny" (5x7) bottom pixel at y+6)
         alt = d.get("altitude_feet")
         aircraft = d.get("aircraft_type", "")
         alt_str = f"{alt:,}ft" if alt else ""
         info_parts = [p for p in [alt_str, aircraft] if p]
-        if info_parts and y + 7 <= y_end:
+        if info_parts and y + 6 < y_end:
             frame.elements.append(
                 TextElement(2, y, "  ".join(info_parts), "tiny", colors.DIM_CYAN,
                             max_width=self.width - 2)
