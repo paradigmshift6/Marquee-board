@@ -80,7 +80,9 @@ class LayoutEngine:
         ]
 
         # --- Smart adaptive layout selection ---
-        if flights and urgent_events:
+        # Split layout needs ~16 px per half; skip it on short (32 px) panels
+        # and fall through to flight-full which handles the single-section case.
+        if flights and urgent_events and self.height > 32:
             self._layout_split(frame, flights[0], urgent_events[0], weather)
         elif flights:
             self._layout_flight_full(frame, flights[0], weather)
@@ -125,7 +127,7 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen flight display."""
-        strip_h = 10 if self.height <= 32 else 13  # smaller strip on short panels
+        strip_h = 12 if self.height <= 32 else 13  # extra margin on short panels
         self._draw_flight_section(frame, flight, y_start=0, y_end=self.height - strip_h)
 
         # Bottom strip: weather summary if available
@@ -141,7 +143,7 @@ class LayoutEngine:
         weather: List[MarqueeMessage],
     ):
         """Full screen calendar event (urgent)."""
-        strip_h = 10 if self.height <= 32 else 13  # smaller strip on short panels
+        strip_h = 12 if self.height <= 32 else 13  # extra margin on short panels
         self._draw_calendar_section(frame, event, y_start=0, y_end=self.height - strip_h)
 
         if weather:
@@ -189,7 +191,7 @@ class LayoutEngine:
         date_str = now.strftime("%a %b %-d")
 
         clock_x = self.width // 2 - 20
-        ampm_x = clock_x + self._approx_text_width(time_str) + 2
+        ampm_x = clock_x + self._approx_text_width(time_str, "large") + 2
 
         # Large centered clock
         frame.elements.append(
@@ -306,22 +308,28 @@ class LayoutEngine:
             TextElement(11, y, label, "tiny", label_color,
                         max_width=self.width - 11)
         )
-        y += 9  # tight spacing to keep event name within display bounds
+
+        # Header advance: tighter on short sections to leave room for event text
+        section_h = y_end - y_start
+        header_h = 8 if section_h < 22 else 9
+        y += header_h
 
         # Event name — word-wrapped onto as many lines as space allows
         summary = d.get("summary", event.text)
         max_line_px = self.width - 4  # 2px margin each side
-        lines = self._word_wrap(summary, max_line_px)
+        # Use tighter line height when the remaining area is small (short panels)
+        available = y_end - y
+        line_height = 8 if available < 20 else 9
+        lines = self._word_wrap(summary, max_line_px, "tiny")
 
         # How many summary lines fit in remaining space?
-        line_height = 9
-        max_lines = max(1, (y_end - y) // line_height)
+        max_lines = max(1, available // line_height)
         lines = lines[:max_lines]
 
         # If we had to cut lines, truncate the last one with "."
-        if max_lines < len(self._word_wrap(summary, max_line_px)):
+        if max_lines < len(self._word_wrap(summary, max_line_px, "tiny")):
             last = lines[-1]
-            while self._approx_text_width(last + ".") > max_line_px and len(last) > 1:
+            while self._approx_text_width(last + ".", "tiny") > max_line_px and len(last) > 1:
                 last = last[:-1]
             lines[-1] = last.rstrip() + "."
 
@@ -429,7 +437,7 @@ class LayoutEngine:
         time_str = now.strftime("%-I:%M")
         ampm = now.strftime("%p").lower()
 
-        ampm_x = 11 + self._approx_text_width(time_str) + 2
+        ampm_x = 11 + self._approx_text_width(time_str, "medium") + 2
 
         frame.elements.append(IconElement(1, y_start + 1, "clock", size=8))
         frame.elements.append(
@@ -454,12 +462,23 @@ class LayoutEngine:
         )
 
     @staticmethod
-    def _approx_text_width(text: str) -> int:
-        """Approximate pixel width using Pillow default font (~6px/char)."""
-        return len(text) * 6
+    def _approx_text_width(text: str, font_name: str = "small") -> int:
+        """Approximate pixel width of text for the given logical font.
+
+        Uses average character widths measured from DejaVuSans at each
+        size.  These are intentionally slight overestimates so word-wrap
+        avoids overflow rather than allowing it.
+        """
+        _CHAR_W = {
+            "tiny":   5,   # DejaVuSans 8 px  ≈ 5 px/char
+            "small":  6,   # DejaVuSans 10 px ≈ 6 px/char
+            "medium": 7,   # DejaVuSans 12 px ≈ 7 px/char
+            "large":  9,   # DejaVuSans 16 px ≈ 9 px/char
+        }
+        return len(text) * _CHAR_W.get(font_name, 6)
 
     @classmethod
-    def _word_wrap(cls, text: str, max_px: int) -> list:
+    def _word_wrap(cls, text: str, max_px: int, font_name: str = "small") -> list:
         """Split text into lines that fit within max_px width."""
         words = text.split()
         if not words:
@@ -470,7 +489,7 @@ class LayoutEngine:
 
         for word in words[1:]:
             test = current + " " + word
-            if cls._approx_text_width(test) <= max_px:
+            if cls._approx_text_width(test, font_name) <= max_px:
                 current = test
             else:
                 lines.append(current)
