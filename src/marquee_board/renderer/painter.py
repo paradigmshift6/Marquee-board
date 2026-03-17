@@ -103,8 +103,11 @@ class FramePainter:
         # Render text onto a same-size greyscale scratch canvas
         tmp = Image.new("L", img.size, 0)
         ImageDraw.Draw(tmp).text((x, y), text, fill=255, font=font)
-        # Hard threshold: any pixel above 127 → fully on
-        alpha = tmp.point(lambda p: 255 if p > 127 else 0)
+        # Threshold: keep pixels above 40 to preserve thin strokes that
+        # TrueType anti-aliasing renders at lower brightness at small sizes.
+        # 127 cuts too aggressively and breaks character shapes; 40 eliminates
+        # the faint halo (0-39) while keeping all meaningful glyph pixels.
+        alpha = tmp.point(lambda p: 255 if p > 40 else 0)
         colored = Image.new("RGB", img.size, color[:3])
         img.paste(colored, mask=alpha)
 
