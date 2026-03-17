@@ -8,6 +8,9 @@ venv/
 *.egg
 .eggs/
 
+# BDF font conversion cache (generated at runtime)
+src/marquee_board/renderer/bdf_cache/
+
 # Cached reference databases (large, downloaded at runtime)
 data/*.csv
 data/*.dat
