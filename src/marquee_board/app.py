@@ -45,7 +45,9 @@ class MarqueeBoardApp:
                         if not self._sleeping:
                             logger.info("Outside active hours — entering sleep mode")
                             self._sleeping = True
-                            self._display.update({}, {}, structured=[])
+                        # Keep updating so the idle clock stays current.
+                        # Empty structured list → layout engine shows idle screen.
+                        self._display.update({}, {}, structured=[])
                         time.sleep(30)
                         continue
 

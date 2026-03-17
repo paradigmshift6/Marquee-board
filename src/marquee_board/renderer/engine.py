@@ -184,45 +184,54 @@ class LayoutEngine:
         self._draw_weather_section(frame, weather, y_start=14, y_end=self.height)
 
     def _layout_idle(self, frame: FrameLayout):
-        """Nothing to show — display clock and date."""
+        """Nothing to show — display a dim clock and date, properly centred."""
         now = datetime.now()
         time_str = now.strftime("%-I:%M")
-        ampm = now.strftime("%p").lower()
+        ampm    = now.strftime("%p").lower()
         date_str = now.strftime("%a %b %-d")
 
-        clock_x = self.width // 2 - 20
-        ampm_x = clock_x + self._approx_text_width(time_str, "large") + 2
+        # ── Measure widths (matches BDF font cell widths exactly) ──────────
+        time_w = self._approx_text_width(time_str, "large")   # 9 px/char
+        ampm_w = self._approx_text_width(ampm, "tiny")        # 5 px/char
+        date_w = self._approx_text_width(date_str, "small")   # 6 px/char
 
-        # Large centered clock
+        # Total width of "HH:MM am" row (time + 2 px gap + am/pm)
+        row_w = time_w + 2 + ampm_w
+
+        # Horizontal: centre the time row; centre the date independently
+        clock_x = max(1, (self.width - row_w) // 2)
+        ampm_x  = clock_x + time_w + 2
+        date_x  = max(1, (self.width - date_w) // 2)
+
+        # Vertical: stack [time row 15px] [2px gap] [date 10px] = 27px block
+        block_h = 15 + 2 + 10
+        time_y  = max(0, (self.height - block_h) // 2)
+        date_y  = time_y + 17
+
+        # ── Elements ───────────────────────────────────────────────────────
         frame.elements.append(
             TextElement(
-                x=clock_x,
-                y=self.height // 2 - 14,
-                text=time_str,
-                font_name="large",
-                color=colors.CLOCK_COLOR,
+                x=clock_x, y=time_y,
+                text=time_str, font_name="large",
+                color=colors.SLEEP_CLOCK_COLOR,
                 max_width=self.width - clock_x,
+            )
+        )
+        # am/pm sits slightly lower to baseline-align with the large glyphs
+        frame.elements.append(
+            TextElement(
+                x=ampm_x, y=time_y + 7,
+                text=ampm, font_name="tiny",
+                color=colors.SLEEP_DATE_COLOR,
+                max_width=max(1, self.width - ampm_x),
             )
         )
         frame.elements.append(
             TextElement(
-                x=ampm_x,
-                y=self.height // 2 - 10,
-                text=ampm,
-                font_name="tiny",
-                color=colors.DIM_WHITE,
-                max_width=self.width - ampm_x,
-            )
-        )
-        # Date below
-        frame.elements.append(
-            TextElement(
-                x=clock_x,
-                y=self.height // 2 + 4,
-                text=date_str,
-                font_name="small",
-                color=colors.DIM_AMBER,
-                max_width=self.width - clock_x,
+                x=date_x, y=date_y,
+                text=date_str, font_name="small",
+                color=colors.SLEEP_DATE_COLOR,
+                max_width=self.width - date_x,
             )
         )
 

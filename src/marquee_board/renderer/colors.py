@@ -29,3 +29,7 @@ CLOCK_COLOR = WHITE
 LABEL_COLOR = DIM_WHITE
 SEPARATOR_COLOR = (40, 40, 40)
 BG_COLOR = (0, 0, 0)
+
+# Sleep / idle screen — very dim so the display is unobtrusive at night
+SLEEP_CLOCK_COLOR = (50, 50, 70)   # dim blue-white
+SLEEP_DATE_COLOR  = (45, 30, 0)    # dim amber
